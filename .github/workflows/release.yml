@@ -39,6 +39,9 @@ jobs:
           elif [ "$tagged" = "true" ]; then
             echo "v$new is already released - nothing to publish."
             echo "go=false" >> "$GITHUB_OUTPUT"
+          elif ! git rev-parse -q --verify HEAD~1 >/dev/null; then
+            echo "First commit - releasing v$new."
+            echo "go=true" >> "$GITHUB_OUTPUT"
           elif [ -n "$old" ] && [ "$new" != "$old" ]; then
             echo "Releasing v$new (was $old)."
             echo "go=true" >> "$GITHUB_OUTPUT"
