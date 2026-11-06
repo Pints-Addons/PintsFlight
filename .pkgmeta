@@ -1,0 +1,5 @@
+package-as: PintsFlight
+
+manual-changelog:
+  filename: CHANGELOG.txt
+  markup-type: plain

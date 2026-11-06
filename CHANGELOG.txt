@@ -1,0 +1,11 @@
+Pint's Flight - Changelog
+
+v1.0
+- First public release.
+- While you fly: a small bar shows where you're going, how many stops are left and a countdown to landing,
+  with a progress strip.
+- Learns each route: the first flight on a route is an estimate (shown with a ~), after landing the real time
+  is remembered, so the next flight on that route counts down exactly.
+- Flight master's map: hovering a destination adds "2 stops - about 2:40" to its tooltip.
+- /pflight to unlock and move the bar, /pflight reset to put it back.
+- Works on Classic Era and WoW Forever.
