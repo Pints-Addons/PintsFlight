@@ -1,7 +1,8 @@
 -- Pint's Flight: while you're on a flight path, a small bar shows where you're going, how many stops are left and a
 -- countdown to landing. The first time you fly a route the time is an estimate (marked ~); after landing the real time
 -- is remembered, so the next flight on that route counts down exactly. Hovering a flight master's map shows stops and time.
---   /pflight            unlock / lock the bar (drag it while unlocked)
+--   /pflight            unlock / lock the bar (drag it while unlocked; middle-drag moves it any time)
+--   /pflight disembark  show or hide the Disembark button
 --   /pflight reset      put the bar back in its default spot
 local ADDON = ...
 local PF = {}
@@ -79,8 +80,9 @@ local function Build()
 	bar:SetSize(300, 40)
 	bar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
 	bar:SetBackdropColor(0, 0, 0, 0.6); bar:SetBackdropBorderColor(0, 0, 0, 1)
-	bar:SetMovable(true); bar:SetClampedToScreen(true); bar:RegisterForDrag("LeftButton")
-	bar:SetScript("OnDragStart", function(self) if not db.locked then self:StartMoving() end end)
+	bar:SetMovable(true); bar:SetClampedToScreen(true); bar:EnableMouse(true); bar:RegisterForDrag("LeftButton", "MiddleButton")
+	-- drag with the middle mouse button any time (locked or not); with the left button while unlocked (/pflight)
+	bar:SetScript("OnDragStart", function(self, button) if button == "MiddleButton" or not db.locked then self:StartMoving() end end)
 	bar:SetScript("OnDragStop", function(self)
 		self:StopMovingOrSizing()
 		local p, _, rp, x, y = self:GetPoint(); db.pos = { p, rp, x, y }
@@ -94,6 +96,25 @@ local function Build()
 	bar.prog = CreateFrame("StatusBar", nil, bar); bar.prog:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
 	bar.prog:SetStatusBarColor(0.83, 0.63, 0.09); bar.prog:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 40, 3); bar.prog:SetPoint("BOTTOMRIGHT", -4, 3)
 	bar.prog:SetHeight(3); bar.prog:SetMinMaxValues(0, 1)
+	-- Disembark: land at the next flight point instead of flying on (when the game offers it)
+	bar.land = CreateFrame("Button", nil, bar, "UIPanelButtonTemplate")
+	bar.land:SetSize(84, 22); bar.land:SetPoint("LEFT", bar, "RIGHT", 4, 0); bar.land:SetText("Disembark")
+	bar.land:SetScript("OnClick", function(self)
+		if not (TaxiRequestEarlyLanding and flight and UnitOnTaxi("player")) then return end
+		TaxiRequestEarlyLanding()
+		flight.early = true
+		self:Disable(); self:SetText("Landing...")
+		local h = flight.route.hops[flight.stop]
+		Print("landing at the next stop" .. (h and h[3] ~= "?" and (": " .. Short(h[3])) or "") .. ".")
+	end)
+	bar.land:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine("Disembark")
+		local h = flight and flight.route.hops[flight.stop]
+		GameTooltip:AddLine("End the flight at the next stop" .. (h and h[3] ~= "?" and (": " .. Short(h[3])) or "") .. ".", 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	bar.land:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	bar.land:Hide()
 	PF.Place()
 	bar:Hide()
 end
@@ -148,6 +169,9 @@ local function OnUpdate(_, el)
 	if left > 0 then bar.time:SetText((flight.estimate and "~" or "") .. Clock(left))
 	else bar.time:SetText("|cffaaaaaa" .. (flight.estimate and "soon" or "0:00") .. "|r") end
 	bar.prog:SetValue(math.min(1, elapsed / math.max(1, flight.total)))
+	-- Disembark: only while there's a stop before your destination to land at (the game can end a flight early only
+	-- on clients that have it - WoW Forever)
+	bar.land:SetShown(TaxiRequestEarlyLanding ~= nil and db.disembark ~= false and (stops > 0 or flight.early) and true or false)
 end
 function PF.Start(slot)
 	local r = PF.Route(slot)
@@ -158,6 +182,7 @@ function PF.Start(slot)
 	bar.to:SetText("To " .. Short(r.to)); bar.time:SetText((est and "~" or "") .. Clock(t)); bar.prog:SetValue(0)
 	local stops = #r.hops - 1
 	bar.stops:SetText(stops == 0 and "Direct flight" or (stops == 1 and "1 stop left" or (stops .. " stops left")))
+	bar.land:Enable(); bar.land:SetText("Disembark"); bar.land:Hide()
 	bar:SetScript("OnUpdate", OnUpdate)
 	bar:Show()
 end
@@ -166,6 +191,7 @@ function PF.Landed()
 	flight = nil
 	if bar then bar:Hide(); bar:SetScript("OnUpdate", nil) end
 	if not f or not f.flying then return end
+	if f.early then return end            -- (cut short: not the route's real time)
 	local took = GetTime() - f.flying
 	if took < 10 then return end
 	db.times[Key(f.route)] = math.floor(took + 0.5)
@@ -224,6 +250,10 @@ SlashCmdList.PINTSFLIGHT = function(msg)
 	msg = (msg or ""):lower()
 	if not bar then Build() end
 	if msg == "reset" then db.pos = nil; PF.Place(); Print("bar back in its spot."); return end
+	if msg == "disembark" then
+		db.disembark = (db.disembark == false) and true or false
+		Print("Disembark button " .. (db.disembark and "on." or "off.")); return
+	end
 	db.locked = not db.locked
 	if db.locked then
 		if not flight then bar:Hide() end

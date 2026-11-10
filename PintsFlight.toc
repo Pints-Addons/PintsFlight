@@ -1,8 +1,8 @@
 ## Interface: 11508, 11509, 16001
 ## Title: |cffd4a017Pint's|r Flight
-## Notes: While you fly: where you're going, how many stops are left and a countdown to landing. Learns each route's real time the first time you fly it. /pflight
+## Notes: While you fly: where you're going, how many stops are left and a countdown to landing, and a Disembark button to land at the next stop. Learns each route's real time the first time you fly it. /pflight
 ## Author: Jake (Pint's Add-ons, built with Claude)
-## Version: 1.0
+## Version: 1.1
 ## X-Curse-Project-ID: 1786359
 ## X-License: GPL-3.0
 ## SavedVariables: PintsFlightDB

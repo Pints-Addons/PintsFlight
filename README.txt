@@ -22,6 +22,8 @@ HOW TO USE
   Just fly.
   /pflight          unlock the bar so you can drag it; /pflight again to lock it
   /pflight reset    put the bar back in its default spot
+  /pflight disembark  show or hide the Disembark button (ends a flight at the next stop - WoW Forever)
+  Middle-click and drag the bar to move it any time.
 
 FEEDBACK
   Report a bug or suggest an idea: https://github.com/Pints-Addons/PintsFlight/issues

@@ -1,5 +1,11 @@
 Pint's Flight - Changelog
 
+v1.1
+- Disembark: a button beside the bar ends your flight at the next flight point instead of flying on (WoW Forever -
+  the game only offers it there). It shows while there's a stop before your destination; /pflight disembark hides it.
+  A flight cut short isn't remembered as the route's time.
+- Middle-click and drag the bar to move it any time, locked or not.
+
 v1.0
 - First public release.
 - While you fly: a small bar shows where you're going, how many stops are left and a countdown to landing,
