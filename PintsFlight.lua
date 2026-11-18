@@ -75,6 +75,16 @@ end
 
 ---------------------------------------------------------------- the bar
 local bar
+-- The Disembark button is a secure frame, so the game won't let its parent bar be shown/hidden in combat;
+-- in that case wait until combat ends.
+local wantShown
+local regen = CreateFrame("Frame")
+regen:SetScript("OnEvent", function(self) self:UnregisterEvent("PLAYER_REGEN_ENABLED"); if bar and wantShown ~= nil then bar:SetShown(wantShown) end end)
+local function BarShown(show)
+	if not bar then return end
+	if InCombatLockdown() then wantShown = show; regen:RegisterEvent("PLAYER_REGEN_ENABLED") else wantShown = nil; bar:SetShown(show) end
+end
+
 local function Build()
 	bar = CreateFrame("Frame", "PintsFlightBar", UIParent, "BackdropTemplate")
 	bar:SetSize(300, 40)
@@ -97,16 +107,31 @@ local function Build()
 	bar.prog:SetStatusBarColor(0.83, 0.63, 0.09); bar.prog:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 40, 3); bar.prog:SetPoint("BOTTOMRIGHT", -4, 3)
 	bar.prog:SetHeight(3); bar.prog:SetMinMaxValues(0, 1)
 	-- Disembark: land at the next flight point instead of flying on (when the game offers it)
-	bar.land = CreateFrame("Button", nil, bar, "UIPanelButtonTemplate")
+	-- The game blocks add-ons from calling TaxiRequestEarlyLanding() directly, so on clients with the game's own
+	-- "Request Stop" button (MainMenuBarVehicleLeaveButton) this is a secure button that clicks that one for you.
+	-- Without it (Classic Era) it falls back to the plain call.
+	local leave = MainMenuBarVehicleLeaveButton
+	bar.land = CreateFrame("Button", "PintsFlightDisembark", bar, leave and "UIPanelButtonTemplate,SecureActionButtonTemplate" or "UIPanelButtonTemplate")
 	bar.land:SetSize(84, 22); bar.land:SetPoint("LEFT", bar, "RIGHT", 4, 0); bar.land:SetText("Disembark")
-	bar.land:SetScript("OnClick", function(self)
-		if not (TaxiRequestEarlyLanding and flight and UnitOnTaxi("player")) then return end
-		TaxiRequestEarlyLanding()
+	local function Landing(self)
+		if not (flight and UnitOnTaxi("player")) then return end
 		flight.early = true
-		self:Disable(); self:SetText("Landing...")
+		self:SetText("Landing...")
 		local h = flight.route.hops[flight.stop]
 		Print("landing at the next stop" .. (h and h[3] ~= "?" and (": " .. Short(h[3])) or "") .. ".")
-	end)
+	end
+	if leave then
+		bar.land:RegisterForClicks("AnyUp", "AnyDown")
+		bar.land:SetAttribute("type", "click")
+		bar.land:SetAttribute("clickbutton", leave)
+		bar.land:SetScript("PostClick", Landing)
+	else
+		bar.land:SetScript("OnClick", function(self)
+			if not (TaxiRequestEarlyLanding and flight and UnitOnTaxi("player")) then return end
+			TaxiRequestEarlyLanding()
+			Landing(self)
+		end)
+	end
 	bar.land:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine("Disembark")
 		local h = flight and flight.route.hops[flight.stop]
@@ -116,7 +141,7 @@ local function Build()
 	bar.land:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	bar.land:Hide()
 	PF.Place()
-	bar:Hide()
+	BarShown(false)
 end
 function PF.Place()
 	if not bar then return end
@@ -171,7 +196,8 @@ local function OnUpdate(_, el)
 	bar.prog:SetValue(math.min(1, elapsed / math.max(1, flight.total)))
 	-- Disembark: only while there's a stop before your destination to land at (the game can end a flight early only
 	-- on clients that have it - WoW Forever)
-	bar.land:SetShown(TaxiRequestEarlyLanding ~= nil and db.disembark ~= false and (stops > 0 or flight.early) and true or false)
+	local show = TaxiRequestEarlyLanding ~= nil and db.disembark ~= false and (stops > 0 or flight.early) and true or false
+	if bar.land:IsShown() ~= show and not InCombatLockdown() then bar.land:SetShown(show) end
 end
 function PF.Start(slot)
 	local r = PF.Route(slot)
@@ -182,14 +208,14 @@ function PF.Start(slot)
 	bar.to:SetText("To " .. Short(r.to)); bar.time:SetText((est and "~" or "") .. Clock(t)); bar.prog:SetValue(0)
 	local stops = #r.hops - 1
 	bar.stops:SetText(stops == 0 and "Direct flight" or (stops == 1 and "1 stop left" or (stops .. " stops left")))
-	bar.land:Enable(); bar.land:SetText("Disembark"); bar.land:Hide()
+	bar.land:SetText("Disembark"); if not InCombatLockdown() then bar.land:Hide() end
 	bar:SetScript("OnUpdate", OnUpdate)
-	bar:Show()
+	BarShown(true)
 end
 function PF.Landed()
 	local f = flight
 	flight = nil
-	if bar then bar:Hide(); bar:SetScript("OnUpdate", nil) end
+	if bar then BarShown(false); bar:SetScript("OnUpdate", nil) end
 	if not f or not f.flying then return end
 	if f.early then return end            -- (cut short: not the route's real time)
 	local took = GetTime() - f.flying
@@ -208,7 +234,7 @@ watch:SetScript("OnUpdate", function()
 	if flight and flight.waiting and UnitOnTaxi("player") then
 		flight.waiting = nil; flight.flying = GetTime(); flight.start = GetTime()
 	elseif flight and flight.waiting and GetTime() - flight.start > 10 then
-		flight = nil; if bar then bar:Hide() end          -- didn't take off
+		flight = nil; if bar then BarShown(false) end          -- didn't take off
 	end
 end)
 
@@ -256,10 +282,10 @@ SlashCmdList.PINTSFLIGHT = function(msg)
 	end
 	db.locked = not db.locked
 	if db.locked then
-		if not flight then bar:Hide() end
+		if not flight then BarShown(false) end
 		Print("bar locked.")
 	else
 		bar.to:SetText("Pint's Flight - drag me"); bar.stops:SetText("2 stops left"); bar.time:SetText("1:23"); bar.prog:SetValue(0.4)
-		bar:Show(); Print("bar unlocked - drag it where you like, then /pflight again to lock it.")
+		BarShown(true); Print("bar unlocked - drag it where you like, then /pflight again to lock it.")
 	end
 end
