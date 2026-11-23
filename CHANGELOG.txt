@@ -1,5 +1,10 @@
 Pint's Flight - Changelog
 
+v1.1.2
+- A flight that lands short of its destination - the game's own Request Stop button, or anything else that ends it
+  early - isn't remembered as the route's time any more (Orgrimmar to Tainted Foothills was saved from a stop at
+  Everlook; that time is forgotten).
+
 v1.1
 - Disembark: a button beside the bar ends your flight at the next flight point instead of flying on (WoW Forever -
   the game only offers it there). It shows while there's a stop before your destination; /pflight disembark hides it.

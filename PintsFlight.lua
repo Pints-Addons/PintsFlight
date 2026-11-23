@@ -218,6 +218,15 @@ function PF.Landed()
 	if bar then BarShown(false); bar:SetScript("OnUpdate", nil) end
 	if not f or not f.flying then return end
 	if f.early then return end            -- (cut short: not the route's real time)
+	-- landed somewhere other than the destination (the game's own Request Stop, or a flight cut short some other way):
+	-- not the route's real time either
+	local r = f.route
+	local dest = r.hops and r.hops[#r.hops]
+	local x, y = PlayerXY(r.mapID)
+	if dest and x and y and x > 0 and dest[1] and dest[2] then
+		local W, H = MapYards(r.mapID)
+		if math.sqrt(((x - dest[1]) * W) ^ 2 + ((y - dest[2]) * H) ^ 2) > 300 then return end
+	end
 	local took = GetTime() - f.flying
 	if took < 10 then return end
 	db.times[Key(f.route)] = math.floor(took + 0.5)
@@ -257,6 +266,9 @@ end
 
 ---------------------------------------------------------------- events
 hooksecurefunc("TakeTaxiNode", function(slot) pcall(PF.Start, slot) end)
+-- the game's own early landing (its Request Stop button, or a macro): this flight's time isn't the route's
+if TaxiRequestEarlyLanding then hooksecurefunc("TaxiRequestEarlyLanding", function() if flight then flight.early = true end end) end
+if MainMenuBarVehicleLeaveButton then MainMenuBarVehicleLeaveButton:HookScript("OnClick", function() if flight and UnitOnTaxi("player") then flight.early = true end end) end
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "TAXIMAP_OPENED", "PLAYER_CONTROL_GAINED" }) do pcall(ev.RegisterEvent, ev, e) end
 ev:SetScript("OnEvent", function(_, e, a1)
@@ -265,6 +277,11 @@ ev:SetScript("OnEvent", function(_, e, a1)
 		db = PintsFlightDB
 		for k, v in pairs(DEFAULTS) do if db[k] == nil then db[k] = (type(v) == "table") and {} or v end end
 		PF.db = db
+		-- (once: Orgrimmar to Tainted Foothills was remembered from a flight cut short at Everlook)
+		if not db.fix111 then
+			db.fix111 = true
+			for k in pairs(db.times or {}) do if k:find("^Orgrimmar") and k:find("> Tainted Foothills") then db.times[k] = nil end end
+		end
 	elseif e == "TAXIMAP_OPENED" or e == "PLAYER_LOGIN" then HookMap()
 	elseif e == "PLAYER_CONTROL_GAINED" then
 		if flight and flight.flying and not UnitOnTaxi("player") then PF.Landed() end
